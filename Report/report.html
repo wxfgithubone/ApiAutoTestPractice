@@ -1,0 +1,1628 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>自动化测试报告</title>
+    <style>body {
+	font-family: Helvetica, Arial, sans-serif;
+	font-size: 12px;
+	/* do not increase min-width as some may use split screens */
+	min-width: 800px;
+	color: #999;
+}
+
+h1 {
+	font-size: 24px;
+	color: black;
+}
+
+h2 {
+	font-size: 16px;
+	color: black;
+}
+
+p {
+    color: black;
+}
+
+a {
+	color: #999;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+
+#environment td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+}
+
+#environment tr:nth-child(odd) {
+	background-color: #f6f6f6;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed, .passed .col-result {
+	color: green;
+}
+span.skipped, span.xfailed, span.rerun, .skipped .col-result, .xfailed .col-result, .rerun .col-result {
+	color: orange;
+}
+span.error, span.failed, span.xpassed, .error .col-result, .failed .col-result, .xpassed .col-result  {
+	color: red;
+}
+
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+
+#results-table {
+	border: 1px solid #e6e6e6;
+	color: #999;
+	font-size: 12px;
+	width: 100%
+}
+
+#results-table th, #results-table td {
+	padding: 5px;
+	border: 1px solid #E6E6E6;
+	text-align: left
+}
+#results-table th {
+	font-weight: bold
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+
+.log:only-child {
+	height: inherit
+}
+.log {
+	background-color: #e6e6e6;
+	border: 1px solid #e6e6e6;
+	color: black;
+	display: block;
+	font-family: "Courier New", Courier, monospace;
+	height: 230px;
+	overflow-y: scroll;
+	padding: 5px;
+	white-space: pre-wrap
+}
+div.image {
+	border: 1px solid #e6e6e6;
+	float: right;
+	height: 240px;
+	margin-left: 5px;
+	overflow: hidden;
+	width: 320px
+}
+div.image img {
+	width: 320px
+}
+div.video {
+	border: 1px solid #e6e6e6;
+	float: right;
+	height: 240px;
+	margin-left: 5px;
+	overflow: hidden;
+	width: 320px
+}
+div.video video {
+	overflow: hidden;
+	width: 320px;
+    height: 240px;
+}
+.collapsed {
+	display: none;
+}
+.expander::after {
+	content: " (展开详情)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+.collapser::after {
+	content: " (隐藏详情)";
+	color: #BBB;
+	font-style: italic;
+	cursor: pointer;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+	cursor: pointer;
+}
+
+.sort-icon {
+	font-size: 0px;
+	float: left;
+	margin-right: 5px;
+	margin-top: 5px;
+	/*triangle*/
+	width: 0;
+	height: 0;
+	border-left: 8px solid transparent;
+	border-right: 8px solid transparent;
+}
+
+.inactive .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #E6E6E6;
+}
+
+.asc.active .sort-icon {
+	/*finish triangle*/
+	border-bottom: 8px solid #999;
+}
+
+.desc.active .sort-icon {
+	/*finish triangle*/
+	border-top: 8px solid #999;
+}
+</style></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+/*
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+*/
+function add_collapse() {  //修改源码
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">显示详情</a> / ' +
+                            '<a href="javascript:hide_all_extras()">隐藏详情</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (extras.classList.contains("collapsed")) {
+            expandcollapse.classList.add("expander")
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    sort_column(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+    //修改用例报告显示的用例名称
+    var case_name_td = document.getElementsByClassName("col-name")
+        for(var i = 0; i < case_name_td.length; i++)
+            try{
+                case_name_td[i].innerText = case_name_td[i].innerText.split("\[")[1].split("\]")[0];
+            }
+            catch(err){
+                // 如果表格中没有[]会抛异常，如果抛异常就显示null，因为通常只要我们使用参数化就有[]显示
+                case_name_td[i].innerText = "null";
+            }
+    //可选项，自定义修改
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+
+        if (key_a == key_b) return 0;
+
+        if (reversed) {
+            return (key_a < key_b ? 1 : -1);
+        } else {
+            return (key_a > key_b ? 1 : -1);
+        }
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>以下为本次接口自动化测试执行结果</h1>
+    <p>报告生成时间：2020-10-10 14:50:16(查看附件 PC请使用Chrome 移动端请使用Firefox)</p>
+    <h2>测试环境</h2>
+    <table id="environment">
+      <tr>
+        <td>Python版本</td>
+        <td>3.7.4</td></tr>
+      <tr>
+        <td>接口地址</td>
+        <td><a href="http://admin.shopmell.com/" target="_blank">http://admin.shopmell.com/</a></td></tr>
+      <tr>
+        <td>测试平台</td>
+        <td>Windows-10-10.0.18362-SP0</td></tr>
+      <tr>
+        <td>测试框架</td>
+        <td>Pytest</td></tr>
+      <tr>
+        <td>第三方库</td>
+        <td>PyTestReport, PyYaml, parallel, pytest-html, requests, xlrd</td></tr>
+      <tr>
+        <td>项目名称</td>
+        <td>后台管理系统</td></tr></table>
+    <h2>用例统计</h2>
+    <p>所属部门: 产品研发中心</p>
+    <p>执行人员: autotest</p>
+    <p>执行了106条测试用例, 共计耗时:9.72秒 . </p>
+    <p class="filter" hidden="true"></p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">104 通过</span>, <input checked="true" class="filter" data-test-result="skipped" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">2 跳过</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">0 失败</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 错误</span>, <input checked="true" class="filter" data-test-result="xfailed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">2 预期失败</span>, <input checked="true" class="filter" data-test-result="重新运行" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="重新运行">0 重新运行</span>
+    <h2>测试结果</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">通过/失败</th>
+          <th class="sortable" col="name">用例说明</th>
+          <th>用例所属功能</th>
+          <th class="sortable numeric" col="duration">响应时间</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">无测试结果, 试着选择其他测试结果条件</th></tr></thead>
+      <tbody class="xfailed results-table-row">
+        <tr>
+          <td class="col-result">XFailed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestLevelAdmin::test_level_del[å é¤ç»éåç­çº§ï¼VIPTest]</td>
+          <td>
+        1、获取等级ID
+        2、和用例的新增接口中的name对比
+        3、一致即删除
+        </td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;Test_case.test_member_center.TestLevelAdmin object at 0x0000014B1BE50308&gt;, url = &#x27;/admin/level/delete/&#x27;, method = &#x27;POST&#x27;, payload = &#x27;VIPTest&#x27;, expected = &#x27;success&#x27;<br/><br/>    @allure.story(&quot;删除接口&quot;)<br/>    @pytest.mark.xfail()<br/>    # @pytest.mark.skip(reason=&quot;该功能暂未实现&quot;)<br/>    @pytest.mark.parametrize(<br/>        &quot;url, method, payload, expected&quot;,<br/>        ReadExcel(API_admin_path, &quot;member_center&quot;).auto_excel_read(&quot;member_level_del&quot;, body_col=7),<br/>        ids=ReadExcel(API_admin_path, &quot;member_center&quot;).auto_describe(&quot;member_level_del&quot;)<br/>    )<br/>    def test_level_del(self, url, method, payload, expected):<br/>        &quot;&quot;&quot;<br/>        1、获取等级ID<br/>        2、和用例的新增接口中的name对比<br/>        3、一致即删除<br/>        &quot;&quot;&quot;<br/>        res = LevelAdminApi().member_level_del(<br/>            url=admin_link_os() + url, in_body=payload,  method=method)<br/>&gt;       assert res.json()[&#x27;message&#x27;] == expected<br/><span class="error">E       AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;json&#x27;</span><br/><br/>Test_case\test_member_center.py:268: AttributeError<br/></div></td></tr></tbody>
+      <tbody class="xfailed results-table-row">
+        <tr>
+          <td class="col-result">XFailed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestLevelAdmin::test_level_del[å é¤ä¾åºåç­çº§ï¼LVtest]</td>
+          <td>
+        1、获取等级ID
+        2、和用例的新增接口中的name对比
+        3、一致即删除
+        </td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">self = &lt;Test_case.test_member_center.TestLevelAdmin object at 0x0000014B1BE89588&gt;, url = &#x27;/admin/level/delete/&#x27;, method = &#x27;POST&#x27;, payload = &#x27;LVtest&#x27;, expected = &#x27;success&#x27;<br/><br/>    @allure.story(&quot;删除接口&quot;)<br/>    @pytest.mark.xfail()<br/>    # @pytest.mark.skip(reason=&quot;该功能暂未实现&quot;)<br/>    @pytest.mark.parametrize(<br/>        &quot;url, method, payload, expected&quot;,<br/>        ReadExcel(API_admin_path, &quot;member_center&quot;).auto_excel_read(&quot;member_level_del&quot;, body_col=7),<br/>        ids=ReadExcel(API_admin_path, &quot;member_center&quot;).auto_describe(&quot;member_level_del&quot;)<br/>    )<br/>    def test_level_del(self, url, method, payload, expected):<br/>        &quot;&quot;&quot;<br/>        1、获取等级ID<br/>        2、和用例的新增接口中的name对比<br/>        3、一致即删除<br/>        &quot;&quot;&quot;<br/>        res = LevelAdminApi().member_level_del(<br/>            url=admin_link_os() + url, in_body=payload,  method=method)<br/>&gt;       assert res.json()[&#x27;message&#x27;] == expected<br/><span class="error">E       AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;json&#x27;</span><br/><br/>Test_case\test_member_center.py:268: AttributeError<br/></div></td></tr></tbody>
+      <tbody class="skipped results-table-row">
+        <tr>
+          <td class="col-result">Skipped</td>
+          <td class="col-name">Test_case/test_member_center.py::TestLevelAdmin::test_level_add[添加经销商等级：VIPTest]::setup</td>
+          <td>
+        1、根据用例参数添加对应人员
+        </td>
+          <td class="col-duration">0.00</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">(&#x27;F:\\auto_test\\admin_API_Automation\\Test_case\\test_member_center.py&#x27;, 211, &#x27;Skipped: 该功能暂未实现&#x27;)<br/></div></td></tr></tbody>
+      <tbody class="skipped results-table-row">
+        <tr>
+          <td class="col-result">Skipped</td>
+          <td class="col-name">Test_case/test_member_center.py::TestLevelAdmin::test_level_add[添加供应商等级：LVtest]::setup</td>
+          <td>
+        1、根据用例参数添加对应人员
+        </td>
+          <td class="col-duration">0.00</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">(&#x27;F:\\auto_test\\admin_API_Automation\\Test_case\\test_member_center.py&#x27;, 211, &#x27;Skipped: 该功能暂未实现&#x27;)<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_home_page.py::TestHomePage::test_home_page[éæ©ç¨æ·ï¼ååºææç¨æ·ï¼]</td>
+          <td>首页测试</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_home_page.py::TestHomePage::test_home_page[æªéæ©ç¨æ· - è¿ä¸å¤©è´¢å¡æ»è§]</td>
+          <td>首页测试</td>
+          <td class="col-duration">0.03</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_home_page.py::TestHomePage::test_home_page[æªéæ©ç¨æ· - è¿30å¤©è´¢å¡æ»è§]</td>
+          <td>首页测试</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_home_page.py::TestHomePage::test_home_page[æªéæ©ç¨æ· - æ¥è´¢å¡æ»è§]</td>
+          <td>首页测试</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_home_page.py::TestHomePage::test_home_page[æªéæ©ç¨æ· - å¨è´¢å¡æ»è§]</td>
+          <td>首页测试</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_home_page.py::TestHomePage::test_home_page[æªéæ©ç¨æ· - æè´¢å¡æ»è§]</td>
+          <td>首页测试</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_home_page.py::TestHomePage::test_home_page[éæ©ï¼ç»éåç¨æ·ï¼ - è¿7å¤©è´¢å¡æ»è§]</td>
+          <td>首页测试</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_home_page.py::TestHomePage::test_home_page[éæ©ï¼ç»éåç¨æ·ï¼ - è¿30å¤©è´¢å¡æ»è§]</td>
+          <td>首页测试</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_home_page.py::TestHomePage::test_home_page[éæ©ï¼ç»éåç¨æ·ï¼ - æ¥è´¢å¡æ»è§]</td>
+          <td>首页测试</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_home_page.py::TestHomePage::test_home_page[éæ©ï¼ç»éåç¨æ·ï¼ - å¨è´¢å¡æ»è§]</td>
+          <td>首页测试</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_home_page.py::TestHomePage::test_home_page[éæ©ï¼ç»éåç¨æ·ï¼ - æè´¢å¡æ»è§]</td>
+          <td>首页测试</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_a_login.py::TestLogin::test_login[/admin/passport/login-POST-{&quot;account&quot;:&quot;admin&quot;,&quot;password&quot;:&quot;HUIQMGMM&quot;}-success]</td>
+          <td>登录测试</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_a_login.py::TestLogin::test_login[/admin/passport/login-POST-{&quot;account&quot;:&quot;admin&quot;,&quot;password&quot;:&quot;QMGMM&quot;}-Incorrect account or password]</td>
+          <td>登录测试</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_a_login.py::TestLogin::test_login[/admin/passport/login-POST-{&quot;account&quot;:&quot;ain&quot;,&quot;password&quot;:&quot;HUIQMGMM&quot;}-Incorrect account or password]</td>
+          <td>登录测试</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_a_login.py::TestLogin::test_login[/admin/passport/login-POST-{&quot;account&quot;:&quot;ain&quot;,&quot;password&quot;:&quot;HUIMM&quot;}-Incorrect account or password]</td>
+          <td>登录测试</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_a_login.py::TestLogin::test_login[/admin/passport/login-POST-{&quot;account&quot;:&quot;&quot;,&quot;password&quot;:&quot;&quot;}-Incorrect account or password]</td>
+          <td>登录测试</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_a_login.py::TestLogin::test_login[/admin/passport/login-POST-{&quot;account&quot;:&quot;@#$%&quot;,&quot;password&quot;:&quot;*&amp;^#$&quot;}-Incorrect account or password]</td>
+          <td>登录测试</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestDepartmentAdmin::test_department_list[æ¥è¯¢ææé¨é¨]</td>
+          <td>企业部门 - 列出所有</td>
+          <td class="col-duration">0.05</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestDepartmentAdmin::test_department_add[æ·»å ä¼ä¸é¨é¨ï¼autotest å¤æ³¨ï¼test0]</td>
+          <td>企业部门 - 新增</td>
+          <td class="col-duration">0.06</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestDepartmentAdmin::test_department_add[æ·»å ä¼ä¸é¨é¨ï¼autotest å¤æ³¨ï¼test1]</td>
+          <td>企业部门 - 新增</td>
+          <td class="col-duration">0.06</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestDepartmentAdmin::test_department_edit[ç¼è¾autotesté¨é¨ï¼åç§°ï¼autotestEdit å¤æ³¨ï¼testEdit0]</td>
+          <td>
+        根据list接口查询出对应人员
+        获取到人员ID后进行编辑操作
+        </td>
+          <td class="col-duration">0.06</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestDepartmentAdmin::test_department_edit[ç¼è¾autotesté¨é¨ï¼åç§°ï¼autotestEdit å¤æ³¨ï¼testEdit1]</td>
+          <td>
+        根据list接口查询出对应人员
+        获取到人员ID后进行编辑操作
+        </td>
+          <td class="col-duration">0.06</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestDepartmentAdmin::test_department_page[æ¥è¯¢ä¼ä¸é¨é¨ï¼æµè¯é¨é¨å¿å ]</td>
+          <td>企业部门 - 分页</td>
+          <td class="col-duration">0.06</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestDepartmentAdmin::test_department_page[åé¡µæ¥è¯¢é¨é¨ - ç¬¬1é¡µ10ä¸ª]</td>
+          <td>企业部门 - 分页</td>
+          <td class="col-duration">0.05</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestDepartmentAdmin::test_department_page[åé¡µæ¥è¯¢é¨é¨ - ç¬¬3é¡µ30ä¸ª]</td>
+          <td>企业部门 - 分页</td>
+          <td class="col-duration">0.06</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestDepartmentAdmin::test_department_page[åé¡µæ¥è¯¢é¨é¨ - ç¬¬2é¡µ50ä¸ª]</td>
+          <td>企业部门 - 分页</td>
+          <td class="col-duration">0.06</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestDepartmentAdmin::test_department_page[åé¡µæ¥è¯¢é¨é¨ - ç¬¬1é¡µ100ä¸ª]</td>
+          <td>企业部门 - 分页</td>
+          <td class="col-duration">0.05</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestDepartmentAdmin::test_department_page[åé¡µæ¥è¯¢é¨é¨ - ç¬¬1é¡µ200ä¸ª]</td>
+          <td>企业部门 - 分页</td>
+          <td class="col-duration">0.06</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestDepartmentAdmin::test_department_page[åé¡µæ¥è¯¢é¨é¨ - ç¬¬1é¡µ201ä¸ª]</td>
+          <td>企业部门 - 分页</td>
+          <td class="col-duration">0.06</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestDepartmentAdmin::test_department_del[å é¤ä¼ä¸é¨é¨ï¼testæ·»å é¨é¨]</td>
+          <td>
+        1、根据list接口查询出部门ID
+        2、和excel里的新增部门接口中的name对比
+        3、存在即删除
+        </td>
+          <td class="col-duration">0.07</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestDepartmentAdmin::test_department_del[å é¤ä¼ä¸é¨é¨ï¼ä¿®æ¹æµè¯1]</td>
+          <td>
+        1、根据list接口查询出部门ID
+        2、和excel里的新增部门接口中的name对比
+        3、存在即删除
+        </td>
+          <td class="col-duration">0.06</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestStaffAdmin::test_staff_list[æ¥è¯¢ææåå·¥]</td>
+          <td>企业员工 - 列出所有</td>
+          <td class="col-duration">0.09</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestStaffAdmin::test_staff_add[æ·»å ä¼ä¸åå·¥ï¼é¨é¨ï¼æµè¯é¨é¨ åç§°ï¼testStaff çµè¯ï¼12457845784 é®ç®±ï¼16524578457@163.com å¤æ³¨ï¼test]</td>
+          <td>企业员工 - 添加</td>
+          <td class="col-duration">0.10</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestStaffAdmin::test_staff_edit[ç¼è¾ä¼ä¸åå·¥ï¼åç§°ï¼testEditï¼çµè¯ï¼15+éæº9ä½æ´æ°ï¼é®ç®±ï¼16+éæº9ä½æ´æ°@163.comï¼å¤æ³¨ï¼test+éæº3ä½æ´æ°]</td>
+          <td>
+        1、根据list接口获取人员ID
+        2、获取ID后进行编辑操作
+        </td>
+          <td class="col-duration">0.09</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestStaffAdmin::test_staff_page[æ¥è¯¢åå·¥ï¼åç§°testEdit]</td>
+          <td>企业员工 - 分页</td>
+          <td class="col-duration">0.10</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestStaffAdmin::test_staff_page[åé¡µæ¥è¯¢åå·¥ - ç¬¬1é¡µ10ä¸ª]</td>
+          <td>企业员工 - 分页</td>
+          <td class="col-duration">0.11</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestStaffAdmin::test_staff_page[åé¡µæ¥è¯¢åå·¥ - ç¬¬3é¡µ30ä¸ª]</td>
+          <td>企业员工 - 分页</td>
+          <td class="col-duration">0.10</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestStaffAdmin::test_staff_page[åé¡µæ¥è¯¢åå·¥ - ç¬¬2é¡µ50ä¸ª]</td>
+          <td>企业员工 - 分页</td>
+          <td class="col-duration">0.10</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestStaffAdmin::test_staff_page[åé¡µæ¥è¯¢åå·¥ - ç¬¬1é¡µ100ä¸ª]</td>
+          <td>企业员工 - 分页</td>
+          <td class="col-duration">0.14</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestStaffAdmin::test_staff_page[åé¡µæ¥è¯¢åå·¥ - ç¬¬1é¡µ200ä¸ª]</td>
+          <td>企业员工 - 分页</td>
+          <td class="col-duration">0.10</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_enterprise_admin.py::TestStaffAdmin::test_staff_del[å é¤ä¼ä¸åå·¥ï¼testEdit]</td>
+          <td>
+        1、根据list接口查询出人员ID
+        2、和Excel里的新增接口中的name对比
+        3、一致即删除
+        </td>
+          <td class="col-duration">0.11</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_query_all[æ¥è¯¢ææç¨æ·ï¼ç³»ç»ç®¡çåï¼ç»éåï¼ä¾åºåï¼]</td>
+          <td>会员列表 - 列出所有人员</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_add[æ·»å ç³»ç»ç®¡çåï¼ç³»ç»ç®¡çåAuto]</td>
+          <td>
+        根据用例参数添加对应人员
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_add[æ·»å ç»éåï¼ç»éåAuto]</td>
+          <td>
+        根据用例参数添加对应人员
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_add[æ·»å ä¾åºåï¼ä¾åºåAuto]</td>
+          <td>
+        根据用例参数添加对应人员
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_page[ç³»ç»ç®¡çåï¼åé¡µ]</td>
+          <td>根基用例对应参数进行分页查询</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_page[ç»éåï¼åé¡µ]</td>
+          <td>根基用例对应参数进行分页查询</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_page[ä¾åºåï¼åé¡µ]</td>
+          <td>根基用例对应参数进行分页查询</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_page[ç³»ç»ç®¡çåï¼æç´¢]</td>
+          <td>根基用例对应参数进行分页查询</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_page[ç»éåï¼æç´¢]</td>
+          <td>根基用例对应参数进行分页查询</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_page[ä¾åºåï¼æç´¢]</td>
+          <td>根基用例对应参数进行分页查询</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_role_bind[ç»å®è¶çº§ç®¡çåè§è²]</td>
+          <td>
+        1、访问user/list接口列出当前可选角色
+        2、选择其中的角色进行绑定
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_role_bind[ç»å®ç»éåè§è²]</td>
+          <td>
+        1、访问user/list接口列出当前可选角色
+        2、选择其中的角色进行绑定
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_role_bind[ç»å®ä¾åºåè§è²]</td>
+          <td>
+        1、访问user/list接口列出当前可选角色
+        2、选择其中的角色进行绑定
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_bind_level[ç»å®ç­çº§ï¼VIP1]</td>
+          <td>
+        1、访问user/list接口列出当前可选角色
+        2、选择其中的角色进行绑定
+        </td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_bind_level[ç»å®ç­çº§ï¼LV2]</td>
+          <td>
+        1、访问user/list接口列出当前可选角色
+        2、选择其中的角色进行绑定
+        </td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_modify_price[è®¾ç½®å¤§å®¢æ·]</td>
+          <td>
+        1、选择经销商用户
+        2、获取对应用户ID
+        3、允许/禁止
+        </td>
+          <td class="col-duration">0.26</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_modify_price[åæ¶å¤§å®¢æ·]</td>
+          <td>
+        1、选择经销商用户
+        2、获取对应用户ID
+        3、允许/禁止
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_edit[ç¼è¾ç³»ç»ç®¡çåAuto]</td>
+          <td>
+        1、查询出人员ID
+        2、根据用例参数进行编辑操作
+        </td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_edit[ç¼è¾ç»éåAuto]</td>
+          <td>
+        1、查询出人员ID
+        2、根据用例参数进行编辑操作
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_edit[ç¼è¾ä¾åºåAuto]</td>
+          <td>
+        1、查询出人员ID
+        2、根据用例参数进行编辑操作
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_freeze[å»ç»ç³»ç»ç®¡çåAuto]</td>
+          <td>
+        1、获取需要冻结的用户ID
+        2、与用例的新增接口中的name对比
+        3、一致即冻结
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_freeze[å»ç»éåAuto]</td>
+          <td>
+        1、获取需要冻结的用户ID
+        2、与用例的新增接口中的name对比
+        3、一致即冻结
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_freeze[å»ç»ä¾åºåAuto]</td>
+          <td>
+        1、获取需要冻结的用户ID
+        2、与用例的新增接口中的name对比
+        3、一致即冻结
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_del[å é¤ç³»ç»ç®¡çåAuto]</td>
+          <td>
+        1、获取需要冻结的用户ID
+        2、与用例的新增接口中的name对比
+        3、一致即删除
+        </td>
+          <td class="col-duration">0.08</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:14 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 31 - __init__] 
+数据库连接正常
+[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:14 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 62 - del_data] 
+删除数据：delete from hp_user where id=344<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_del[å é¤éåAuto]</td>
+          <td>
+        1、获取需要冻结的用户ID
+        2、与用例的新增接口中的name对比
+        3、一致即删除
+        </td>
+          <td class="col-duration">0.05</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:14 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 31 - __init__] 
+数据库连接正常
+[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:14 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 62 - del_data] 
+删除数据：delete from hp_user where id=345<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberList::test_member_del[å é¤ä¾åºåAuto]</td>
+          <td>
+        1、获取需要冻结的用户ID
+        2、与用例的新增接口中的name对比
+        3、一致即删除
+        </td>
+          <td class="col-duration">0.06</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log call-------------------------------- <br/>[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:14 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 31 - __init__] 
+数据库连接正常
+[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:14 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 62 - del_data] 
+删除数据：delete from hp_user where id=346<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberAttribute::test_member_attribute_page[ä¼åæçï¼åé¡µï¼1é¡µ30]</td>
+          <td>根据用例参数进行分页查询操作</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberAttribute::test_member_attribute_page[ä¼åæçï¼åé¡µï¼1é¡µ50]</td>
+          <td>根据用例参数进行分页查询操作</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberAttribute::test_member_attribute_page[ä¼åæçï¼åé¡µï¼1é¡µ100]</td>
+          <td>根据用例参数进行分页查询操作</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberAttribute::test_member_attribute_page[ä¼åæçï¼åé¡µï¼1é¡µ200]</td>
+          <td>根据用例参数进行分页查询操作</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberAttribute::test_member_attribute_read[è¯»ååä¸ªä¼åæç]</td>
+          <td>
+        1、获取对应人员ID
+        2、根据用例参数操作
+        </td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberAttribute::test_member_attribute_edit[æ·»å ä¿¡ç¨é¢åº¦åè®¢åå æ¥æ¬¡æ°0]</td>
+          <td>
+        1、获取对应人员ID
+        2、根据用例参数进行操作
+        </td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestMemberAttribute::test_member_attribute_edit[æ·»å ä¿¡ç¨é¢åº¦åè®¢åå æ¥æ¬¡æ°1]</td>
+          <td>
+        1、获取对应人员ID
+        2、根据用例参数进行操作
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestLevelAdmin::test_level_all[æ¥è¯¢ææç»éåç­çº§]</td>
+          <td>
+        列出所有等级（经销商/供应商）
+        </td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestLevelAdmin::test_level_all[æ¥è¯¢ææä¾åºåç­çº§]</td>
+          <td>
+        列出所有等级（经销商/供应商）
+        </td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestLevelAdmin::test_level_all[ååºææç­çº§]</td>
+          <td>
+        列出所有等级（经销商/供应商）
+        </td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestLevelAdmin::test_level_edit[ç¼è¾ç»éåç­çº§ï¼VIPTest]</td>
+          <td>
+        1、获取需要编辑的等级的ID
+        2、根基用例参数进行操作
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestLevelAdmin::test_level_edit[ç¼è¾ä¾åºåç­çº§ï¼LVtest]</td>
+          <td>
+        1、获取需要编辑的等级的ID
+        2、根基用例参数进行操作
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestLevelAdmin::test_level_page[ç­çº§ç®¡çåé¡µï¼1-10]</td>
+          <td>根据用例参数进行分页查询操作</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_member_center.py::TestLevelAdmin::test_level_page[ç­çº§ç®¡çåé¡µï¼1-30]</td>
+          <td>根据用例参数进行分页查询操作</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestPermissionList::test_permission_list[ååºæææé]</td>
+          <td>访问list接口列出所有权限</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestPermissionList::test_permission_add[æ·»å æéä¿¡æ¯]</td>
+          <td>根据用例参数添加对应权限</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestPermissionList::test_permission_page[åé¡µï¼10ä¸ªä¸é¡µï¼ç¬¬1é¡µ]</td>
+          <td>根据用例参数进行分页查询操作</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestPermissionList::test_permission_page[åé¡µï¼30ä¸ªä¸é¡µï¼ç¬¬2é¡µ]</td>
+          <td>根据用例参数进行分页查询操作</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestPermissionList::test_permission_page[åé¡µï¼50ä¸ªä¸é¡µï¼ç¬¬2é¡µ]</td>
+          <td>根据用例参数进行分页查询操作</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestPermissionList::test_permission_page[åé¡µï¼100ä¸ªä¸é¡µï¼ç¬¬1é¡µ]</td>
+          <td>根据用例参数进行分页查询操作</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestPermissionList::test_permission_page[åé¡µï¼200ä¸ªä¸é¡µï¼ç¬¬1é¡µ]</td>
+          <td>根据用例参数进行分页查询操作</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestPermissionList::test_permission_edit[ç¼è¾æéä¿¡æ¯]</td>
+          <td>
+        1、使用前置条件查询出编辑对象的ID
+        2、获得ID后根据用例里的参数进行编辑
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestPermissionList::test_permission_del[å é¤æé]</td>
+          <td>
+        1、使用前置条件查询出编辑对象的ID
+        2、获得ID后根据用例里的参数进行删除
+        </td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log setup------------------------------- <br/>[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:15 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 31 - __init__] 
+数据库连接正常
+[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:15 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 62 - del_data] 
+删除数据：delete from hp_permission where id=92<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestRoleList::test_role_list[ååºææè§è²]</td>
+          <td>访问list接口列出所有角色</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestRoleList::test_role_add[æ·»å è§è²ä¿¡æ¯]</td>
+          <td>根据用例参数添加对应角色</td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestRoleList::test_role_page[åé¡µï¼10ä¸ªä¸é¡µï¼ç¬¬1é¡µ]</td>
+          <td>根据用例参数进行分页查询</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestRoleList::test_role_page[åé¡µï¼30ä¸ªä¸é¡µï¼ç¬¬2é¡µ]</td>
+          <td>根据用例参数进行分页查询</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestRoleList::test_role_page[åé¡µï¼50ä¸ªä¸é¡µï¼ç¬¬2é¡µ]</td>
+          <td>根据用例参数进行分页查询</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestRoleList::test_role_page[åé¡µï¼100ä¸ªä¸é¡µï¼ç¬¬1é¡µ]</td>
+          <td>根据用例参数进行分页查询</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestRoleList::test_role_page[åé¡µï¼200ä¸ªä¸é¡µï¼ç¬¬1é¡µ]</td>
+          <td>根据用例参数进行分页查询</td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestRoleList::test_role_bind[è§è²ç»å®æé]</td>
+          <td>
+        1、根据前置条件查询出所需要的权限与人员ID
+        2、获得ID后根据用例参数进行绑定
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestRoleList::test_role_off_bind[åæ¶ç»å®æé]</td>
+          <td>
+        1、根据前置条件查询出所需要的权限与人员ID
+        2、获得ID后根据用例参数取消绑定
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestRoleList::test_role_edit[ç¼è¾è§è²ä¿¡æ¯]</td>
+          <td>
+        1、根据前置条件查询出所需要的人员ID
+        2、获得ID后根据用例参数编辑
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">未捕获到日志</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestRoleList::test_role_read[æ¥çè§è²]</td>
+          <td>
+        1、根据前置条件查询出所需要的人员ID
+        2、获得ID后根据用例参数查看
+        </td>
+          <td class="col-duration">0.01</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log setup------------------------------- <br/>[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:16 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 31 - __init__] 
+数据库连接正常
+[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:16 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 50 - slt_one_data] 
+查询数据：select * from hp_role where name=&#x27;testNameEdit&#x27;<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestRoleList::test_role_freeze[å»ç»ç¨æ·]</td>
+          <td>
+        1、根据前置条件查询出所需要的人员ID
+        2、获得ID后根据用例参数冻结
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log setup------------------------------- <br/>[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:16 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 31 - __init__] 
+数据库连接正常
+[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:16 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 50 - slt_one_data] 
+查询数据：select * from hp_role where name=&#x27;testNameEdit&#x27;<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestRoleList::test_role_del[å é¤ç¨æ·]</td>
+          <td>
+        1、根据前置条件查询出所需要的人员ID
+        2、获得ID后根据用例参数冻结
+        </td>
+          <td class="col-duration">0.02</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log setup------------------------------- <br/>[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:16 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 31 - __init__] 
+数据库连接正常
+[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:16 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 50 - slt_one_data] 
+查询数据：select * from hp_role where name=&#x27;testNameEdit&#x27;<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Test_case/test_permission_case.py::TestRoleList::test_db_del</td>
+          <td>数据库删除</td>
+          <td class="col-duration">0.00</td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -------------------------------Captured log setup------------------------------- <br/>[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:16 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 31 - __init__] 
+数据库连接正常
+[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:16 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 50 - slt_one_data] 
+查询数据：select * from hp_role where name=&#x27;testNameEdit&#x27;
+[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:16 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 31 - __init__] 
+数据库连接正常
+[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:16 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 62 - del_data] 
+删除数据：delete from hp_role where id=79
+[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:16 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 31 - __init__] 
+数据库连接正常
+[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:16 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 50 - slt_one_data] 
+查询数据：select * from hp_role where name=&#x27;testNameEdit&#x27;
+[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:16 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 31 - __init__] 
+数据库连接正常
+[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:16 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 50 - slt_one_data] 
+查询数据：select * from hp_role where name=&#x27;testNameEdit&#x27;
+[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:16 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 31 - __init__] 
+数据库连接正常
+[32mINFO    [0m 20:log.py:55 2020-10-10 14:50:16 [info] [F:\auto_test\admin_API_Automation\Common\dataBase.py - 50 - slt_one_data] 
+查询数据：select * from hp_role where name=&#x27;testNameEdit&#x27;<br/></div></td></tr></tbody></table></body></html>

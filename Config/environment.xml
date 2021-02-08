@@ -1,0 +1,18 @@
+<environment>
+    <parameter>
+        <key>Python.Version</key>
+        <value>3.7.4</value>
+    </parameter>
+    <parameter>
+        <key>Api.Version</key>
+        <value>1.0.0</value>
+    </parameter>
+    <parameter>
+        <key>Project</key>
+        <value>admin</value>
+    </parameter>
+    <parameter>
+        <key>Company</key>
+        <value>LingJieXian</value>
+    </parameter>
+</environment>

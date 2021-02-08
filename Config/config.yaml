@@ -1,0 +1,26 @@
+logger:
+  format: '%(filename)s-%(lineno)d-%(asctime)s-%(levelname)s-%(message)s'
+  level: DEBUG
+  name: Test
+
+MySQL:
+  db_name: holosie-test
+  host: 192.168.0.118
+  password: Holosie_1
+  port: 3306
+  user: root
+
+Email:
+  Header: "自动化测试报告"
+  address: 652894729@qq.com
+  password: ztxmkbkudhnwbcde
+  port: 465
+  recipients:
+  - 1845719332@qq.com
+  - 19937780940@163.com
+  smtpServer: smtp.qq.com
+  username: AutoTest
+
+URL:
+  QiNiu: http://up-z1.qiniup.com/
+  ImageUrl: http://img.test.ido6.com/

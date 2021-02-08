@@ -1,0 +1,43 @@
+# admin接口测试用例
+--- # 登录接口
+login:
+  -
+    case_id: 001
+    title: 用户登录
+  -
+    case_explain: 填写正确的用户名密码进行登录
+    api_path: /admin/passport/login
+    method: POST
+    type:
+      Content-Type: application/json
+  -
+    payload:
+      account: admin
+      password: HUIQMGMM
+  -
+    expected:
+      code: 200
+      message: success
+
+--- # 首页
+home_page:
+  -
+    case_id: 002
+    title: 财务总览
+  -
+    case_explain: 登录后访问首页财务总览
+    api_path: /admin/financial/summary/summary
+    method: POST
+    type:
+      Content-Type: application/json
+  -
+    payload:
+      beginCreateTime: ''
+      endCreateTime: ''
+      userId: 0
+  -
+    expected:
+      code: 200
+      message: success
+
+
